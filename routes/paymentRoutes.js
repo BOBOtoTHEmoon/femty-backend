@@ -52,20 +52,27 @@ router.post('/create-checkout-session', protect, async (req, res) => {
     const itemsTotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const totalAmount = itemsTotal + deliveryFee;
 
-    // Create order in database first
+    // Create order in database first - matching Order model schema exactly
     const order = await Order.create({
       user: req.user.id,
       orderItems: items.map(item => ({
         name: item.name,
         quantity: item.quantity,
         price: item.price,
-        image: item.image,
-        product: item.productId || item.product
+        image: item.image || '',
+        // product field is optional now
       })),
-      shippingAddress: shippingAddress || {},
+      shippingAddress: {
+        street: shippingAddress?.address || shippingAddress?.street || 'Not provided',
+        city: shippingAddress?.city || shippingAddress?.state || 'Not provided',
+        state: shippingAddress?.state || 'Not provided',
+        zipCode: shippingAddress?.zipCode || '00000',
+        country: shippingAddress?.country || 'USA'
+      },
       paymentMethod: 'stripe',
       itemsPrice: itemsTotal,
       shippingPrice: deliveryFee,
+      taxPrice: 0,
       totalPrice: totalAmount,
       status: 'pending'
     });
@@ -133,11 +140,11 @@ router.post('/verify-session', protect, async (req, res) => {
             paymentResult: {
               id: session.payment_intent,
               status: session.payment_status,
-              email: session.customer_details?.email,
+              email_address: session.customer_details?.email,
             },
           },
           { new: true }
-        ).populate('orderItems.product', 'name price');
+        );
       }
 
       // Get user details
@@ -250,8 +257,8 @@ async function sendOrderConfirmationEmail(user, order, session) {
         <div style="background: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <h3 style="margin-top: 0; color: #AA4A1E;">Shipping Address</h3>
           <p style="margin: 0;">
-            ${order.shippingAddress.address || ''}<br>
-            ${order.shippingAddress.city || ''}, ${order.shippingAddress.state || ''}<br>
+            ${order.shippingAddress.street || ''}<br>
+            ${order.shippingAddress.city || ''}, ${order.shippingAddress.state || ''} ${order.shippingAddress.zipCode || ''}<br>
             ${order.shippingAddress.country || 'USA'}
           </p>
         </div>
@@ -262,11 +269,11 @@ async function sendOrderConfirmationEmail(user, order, session) {
           <ul style="margin: 0; padding-left: 20px;">
             <li>We'll start preparing your order right away</li>
             <li>You'll receive a notification when it ships</li>
-            <li>Delivery typically takes 3-4 business days</li>
+            <li>Delivery typically takes 3-5 business days</li>
           </ul>
         </div>
         
-        <p>If you have any questions, feel free to reply to this email or contact us at <a href="mailto:contact@femtyafricangrocerystore.com" style="color: #AA4A1E;">contact@femtyafricangrocerystore.com</a></p>
+        <p>If you have any questions, feel free to contact us at <a href="mailto:contact@femtyafricangrocerystore.com" style="color: #AA4A1E;">contact@femtyafricangrocerystore.com</a></p>
         
         <p>Thank you for shopping with us!</p>
         
@@ -284,7 +291,7 @@ async function sendOrderConfirmationEmail(user, order, session) {
   `;
 
   await resend.emails.send({
-    from: 'Femty Grocery <orders@femtyafricangrocerystore.com>',
+    from: 'Femty Grocery <onboarding@resend.dev>',
     to: user.email,
     subject: `Order Confirmed! #${order._id.toString().slice(-8).toUpperCase()}`,
     html: emailHtml,
@@ -322,7 +329,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
             paymentResult: {
               id: session.payment_intent,
               status: 'completed',
-              email: session.customer_details?.email,
+              email_address: session.customer_details?.email,
             },
           },
           { new: true }

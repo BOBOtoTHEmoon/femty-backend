@@ -10,9 +10,12 @@ const orderSchema = new mongoose.Schema({
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
+      required: false // Made optional since we store product details
+    },
+    name: {
+      type: String,
       required: true
     },
-    name: String,
     quantity: {
       type: Number,
       required: true,
@@ -28,19 +31,22 @@ const orderSchema = new mongoose.Schema({
     street: { type: String, required: true },
     city: { type: String, required: true },
     state: { type: String, required: true },
-    zipCode: { type: String, required: true },
-    country: { type: String, default: 'Nigeria' }
+    zipCode: { type: String, required: false, default: '00000' },
+    country: { type: String, default: 'USA' }
   },
   paymentMethod: {
     type: String,
     required: true,
-    enum: ['paystack', 'card', 'bank_transfer', 'cash_on_delivery']
+    enum: ['paystack', 'card', 'bank_transfer', 'cash_on_delivery', 'stripe']
   },
   paymentResult: {
     id: String,
     status: String,
     update_time: String,
     email_address: String
+  },
+  stripeSessionId: {
+    type: String
   },
   itemsPrice: {
     type: Number,
